@@ -10,7 +10,7 @@ Payout is a **lookup of the fixed amount published when the program was created*
 
 ## Live App
 
-_(fill after Vercel production deploy)_
+https://auditbounty-genlayer.vercel.app
 
 ## Deployed Contract
 
