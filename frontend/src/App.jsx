@@ -472,7 +472,7 @@ export default function App() {
   return (
     <div className="app">
       <div className="free-banner">
-        Miễn phí sử dụng — chỉ tốn phí gas mạng GenLayer khi ký giao dịch. Không có phí nền tảng nào khác.
+        Free to use — you only pay GenLayer network gas when you sign a transaction. There is no other platform fee.
       </div>
 
       {!hasContractAddress && (
@@ -813,7 +813,7 @@ export default function App() {
                           </>
                         ) : (
                           <>
-                            <Scale size={16} /> Yêu cầu AI phân loại
+                            <Scale size={16} /> Request AI classification
                           </>
                         )}
                       </button>
@@ -830,7 +830,7 @@ export default function App() {
 
                     {isOpen && (status === 'PAYOUT_FAILED' || status === 'REJECTED_NO_FUNDS') && (
                       <button className="btn-primary full" type="button" disabled={loading} onClick={() => handleRetry(report.report_id)}>
-                        <RotateCcw size={15} /> Thử lại
+                        <RotateCcw size={15} /> Retry
                       </button>
                     )}
                   </div>

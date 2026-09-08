@@ -8,7 +8,15 @@ Payout is a **lookup of the fixed amount published when the program was created*
 
 > AuditBounty dies without GenLayer: no EVM contract can read an unstructured security report and classify it against published criteria, and no third party is cheap or fast enough to referee every small report. Only GenLayer's decentralized AI consensus can do this at near-zero cost.
 
-**Contract address:** _(fill after Studio deploy — `Result: SUCCESS`)_
+## Live App
+
+_(fill after Vercel production deploy)_
+
+## Deployed Contract
+
+- **Network:** studionet (GenLayer Studio hosted)
+- **Address:** `0x1F4E41A975E8E6Fd216223993dCa469C02Bd2850`
+- **Explorer:** https://genlayer-explorer.vercel.app/address/0x1F4E41A975E8E6Fd216223993dCa469C02Bd2850
 
 ---
 
@@ -116,9 +124,9 @@ Every money field is **wei / base units**, `bigint` on-chain and `BigInt` off-ch
 - Category chips (Smart Contract / Web App / Mobile App / Infra) prefills scope + severity criteria.
 - Four GEN inputs for the four tiers, validated **Critical ≥ High ≥ Medium ≥ Low** before submit.
 - Report form: program dropdown, PoC + reference URLs with clipboard paste.
-- “Yêu cầu AI phân loại” loading state; severity badges (red / orange / yellow / green / gray).
-- `DISPUTED` → add evidence. `REJECTED_NO_FUNDS` / `PAYOUT_FAILED` → “Thử lại”.
-- Sticky banner: *Miễn phí sử dụng — chỉ tốn phí gas mạng GenLayer khi ký giao dịch. Không có phí nền tảng nào khác.*
+- **Request AI classification** loading state; severity badges (red / orange / yellow / green / gray).
+- `DISPUTED` → add evidence. `REJECTED_NO_FUNDS` / `PAYOUT_FAILED` → **Retry**.
+- Sticky banner: *Free to use — you only pay GenLayer network gas when you sign a transaction. There is no other platform fee.*
 - Wallet stays on **studionet**.
 
 ```bash
