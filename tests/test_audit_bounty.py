@@ -63,7 +63,11 @@ def sim_installMocks(vm, web=None, llm=None):
         except Exception:
             pass
     for url, body in web.items():
-        vm.mock_web(url, body)
+        # gltest's VMContext.mock_web expects a dict-like MockedWebResponseData
+        # ({"status": ..., "body": ...}), not a bare string. Wrap plain text
+        # bodies so this helper stays compatible across gltest releases.
+        payload = body if isinstance(body, dict) else {"status": 200, "body": body}
+        vm.mock_web(url, payload)
     if llm_payload is not None:
         vm.mock_llm(".*", llm_payload)
 
@@ -445,7 +449,7 @@ def test_double_resolve_blocked(direct_vm, direct_deploy, direct_accounts):
         contract.resolve_report(report_id)
 
 
-def test_transfer_failure_rolls_back_then_retry(direct_vm, direct_deploy, direct_accounts, monkeypatch):
+def test_transfer_failure_rolls_back_then_retry(direct_vm, direct_deploy, direct_accounts):
     operator = direct_accounts[1]
     hunter = direct_accounts[2]
     contract = direct_deploy(CONTRACT_PATH)
@@ -454,12 +458,17 @@ def test_transfer_failure_rolls_back_then_retry(direct_vm, direct_deploy, direct
     program_id = _create_program(contract, vm, operator)
     report_id = _submit(contract, vm, hunter, program_id)
 
-    import gltest.direct.loader
+    # gltest's direct-mode PostMessage/emit_transfer call is fire-and-forget
+    # (no internal proxy class to monkeypatch in this gltest release, unlike
+    # older releases that exposed `_EOAProxy`). Install a `_gl_call_hook` to
+    # force the underlying PostMessage call to raise, so resolve_report's
+    # `except Exception` rollback path is genuinely exercised end-to-end.
+    def failing_post_message(_vm, request):
+        if "PostMessage" in request:
+            raise Exception("Simulated native transfer execution failure")
+        return None
 
-    def failing_emit_transfer(self, value):
-        raise Exception("Simulated native transfer execution failure")
-
-    monkeypatch.setattr(gltest.direct.loader._EOAProxy, "emit_transfer", failing_emit_transfer)
+    vm._gl_call_hook = failing_post_message
 
     vm.sender = operator
     _resolve(contract, vm, report_id, "MEDIUM", 97, "Confirmed medium")
@@ -472,7 +481,7 @@ def test_transfer_failure_rolls_back_then_retry(direct_vm, direct_deploy, direct
     assert "Transfer failed" in row["verdict_reason"]
     assert _program(contract, program_id)["pool_balance"] == str(POOL)
 
-    monkeypatch.undo()
+    vm._gl_call_hook = None
     vm.sender = hunter
     contract.retry_resolution(report_id)
 
@@ -482,6 +491,67 @@ def test_transfer_failure_rolls_back_then_retry(direct_vm, direct_deploy, direct
     assert row["verdict"] == "MEDIUM"
     assert row["payout_amount"] == str(MEDIUM)
     assert _program(contract, program_id)["pool_balance"] == str(POOL - MEDIUM)
+
+
+def test_operator_cannot_self_report(direct_vm, direct_deploy, direct_accounts):
+    operator = direct_accounts[1]
+    contract = direct_deploy(CONTRACT_PATH)
+    vm = _active_vm(direct_vm)
+
+    program_id = _create_program(contract, vm, operator)
+
+    # Security fix: a program operator must not be able to submit a report
+    # against their own bounty program (self-dealing / fabricated-evidence
+    # payout drain vector).
+    vm.sender = operator
+    with pytest.raises(Exception):
+        contract.submit_report(program_id, "Self dealt", [POC], [REF1, REF2])
+
+    assert contract.get_report_count() == 0
+
+
+def test_settling_lock_blocks_reentrant_resolve(direct_vm, direct_deploy, direct_accounts):
+    operator = direct_accounts[1]
+    hunter = direct_accounts[2]
+    contract = direct_deploy(CONTRACT_PATH)
+    vm = _active_vm(direct_vm)
+
+    program_id = _create_program(contract, vm, operator)
+    report_id = _submit(contract, vm, hunter, program_id)
+
+    reentered = {"attempted": False, "raised": None}
+
+    # Security fix: resolve_report now writes status="SETTLING" to storage
+    # BEFORE the external emit_transfer call, so a reentrant call on the
+    # exact same report (e.g. a hunter contract calling back into the
+    # AuditBounty contract from inside its own receive path while the
+    # PostMessage transfer is outstanding) cannot slip through and trigger
+    # a second AI resolution + a second payout from the same pool.
+    def reentrant_post_message(_vm, request):
+        if "PostMessage" in request and not reentered["attempted"]:
+            reentered["attempted"] = True
+            try:
+                contract.resolve_report(report_id)
+            except Exception as exc:
+                reentered["raised"] = exc
+        return None
+
+    vm._gl_call_hook = reentrant_post_message
+
+    vm.sender = operator
+    _resolve(contract, vm, report_id, "HIGH", 92, "Confirmed high")
+    vm._gl_call_hook = None
+
+    # The reentrant call must have been attempted and must have been
+    # rejected by the SETTLING guard, not silently ignored.
+    assert reentered["attempted"] is True
+    assert reentered["raised"] is not None
+
+    row = _report(contract, report_id)
+    assert row["status"] == "RESOLVED"
+    assert row["settled"] is True
+    # Pool must be debited exactly once for this report, not twice.
+    assert _program(contract, program_id)["pool_balance"] == str(POOL - HIGH)
 
 
 def test_retry_blocked_when_not_failed(direct_vm, direct_deploy, direct_accounts):
