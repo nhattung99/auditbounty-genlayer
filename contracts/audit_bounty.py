@@ -283,6 +283,10 @@ class Contract(gl.Contract):
         if not title or len(title.strip()) == 0:
             raise UserError("Title cannot be empty")
 
+        sender = _to_address(gl.message.sender_address)
+        if _same_addr(sender, program.operator):
+            raise UserError("Program operator cannot submit reports against their own bounty program")
+
         cleaned_poc = _clean_http_urls(poc_urls, "proof-of-concept", 1)
         cleaned_refs = _clean_http_urls(reference_urls, "independent reference", 2)
 
@@ -291,7 +295,7 @@ class Contract(gl.Contract):
 
         self.reports[report_id] = Report(
             program_id=program_id,
-            hunter=_to_address(gl.message.sender_address),
+            hunter=sender,
             title=title.strip(),
             poc_urls=cleaned_poc,
             reference_urls=cleaned_refs,
@@ -435,6 +439,15 @@ class Contract(gl.Contract):
         program.pool_balance = program.pool_balance - payout
         self.programs[report.program_id] = program
 
+        # Lock the report to a non-reenterable interim state and persist it
+        # to storage BEFORE the external transfer call. resolve_report's own
+        # entry guard only accepts SUBMITTED/DISPUTED, so a reentrant call on
+        # this exact report_id (e.g. triggered from inside the hunter's
+        # __receive__ during emit_transfer) is rejected instead of re-running
+        # AI resolution and draining pool_balance a second time.
+        report.status = "SETTLING"
+        self.reports[report_id] = report
+
         try:
             gl.get_contract_at(_to_address(report.hunter)).emit_transfer(value=u256(payout))
             report.settled = True
@@ -474,6 +487,10 @@ class Contract(gl.Contract):
 
         program.pool_balance = program.pool_balance - payout
         self.programs[report.program_id] = program
+
+        # Same interim lock as resolve_report — see comment there.
+        report.status = "SETTLING"
+        self.reports[report_id] = report
 
         try:
             gl.get_contract_at(_to_address(report.hunter)).emit_transfer(value=u256(payout))
