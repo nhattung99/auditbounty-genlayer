@@ -48,14 +48,22 @@ No treasury hop. No value-forward bug.
 ## Resolution flow
 
 1. **Create program** — operator sets scope, severity criteria, four fixed tier amounts, and locks GEN into `pool_balance`.
-2. **Submit report** — hunter sends title, ≥1 PoC URL, ≥2 independent reference URLs.
+2. **Submit report** — hunter (any address other than the program's own operator — see [Security](#security)) sends title, ≥1 PoC URL, ≥2 independent reference URLs.
 3. **Resolve** — `resolve_report` runs `gl.vm.run_nondet`:
    - Leader fetches every URL with `gl.nondet.web.render`, prompts the model, parses `{verdict, confidence, reason}`.
    - Validator: absolute `verdict ==` and the same `confidence >= 60` branch.
 4. `confidence < 60` → `DISPUTED`. Hunter may `add_evidence` and call `resolve_report` again.
 5. Valid verdict → lookup fixed payout. If the pool is short → `REJECTED_NO_FUNDS` (verdict kept, no second AI run).
-6. Transfer fail → reserve is rolled back, status `PAYOUT_FAILED`. `retry_resolution` reuses `payout_amount`.
+6. Before paying out, the report is locked to `SETTLING` in storage, then `emit_transfer` runs. Transfer fail → reserve is rolled back, status `PAYOUT_FAILED`. `retry_resolution` reuses `payout_amount`.
 7. `INVALID` → `RESOLVED`, `settled = true`, payout `0`, pool untouched.
+
+---
+
+## Security
+
+- **Settlement reentrancy guard.** `resolve_report` / `retry_resolution` persist `report.status = "SETTLING"` *before* the external `emit_transfer` call. Both methods only accept reports in specific prior statuses (`SUBMITTED`/`DISPUTED` and `PAYOUT_FAILED`/`REJECTED_NO_FUNDS` respectively), so a reentrant call on the same report while a transfer is outstanding is rejected instead of re-running AI resolution and double-spending the pool.
+- **Operator self-report block.** `submit_report` rejects a caller whose address matches the program's `operator` — an operator cannot submit (and effectively self-adjudicate) a report against their own bounty pool.
+- See [`CHANGELOG.md`](CHANGELOG.md) for the full Security Hardening v1 write-up and test evidence.
 
 ---
 
@@ -149,7 +157,7 @@ cd frontend
 npm test
 ```
 
-Covered: happy path for each of CRITICAL / HIGH / MEDIUM / LOW (exact fixed payout), INVALID (no payout), pool short → `REJECTED_NO_FUNDS` → fund → `retry_resolution`, low confidence → `DISPUTED` → `add_evidence`, broken JSON, missing web mocks, missing PoC/refs, inverted/zero tiers, double-resolve, **forced `emit_transfer` exception → `PAYOUT_FAILED` + pool rollback → retry succeeds**.
+Covered: happy path for each of CRITICAL / HIGH / MEDIUM / LOW (exact fixed payout), INVALID (no payout), pool short → `REJECTED_NO_FUNDS` → fund → `retry_resolution`, low confidence → `DISPUTED` → `add_evidence`, broken JSON, missing web mocks, missing PoC/refs, inverted/zero tiers, double-resolve, forced `emit_transfer` exception → `PAYOUT_FAILED` + pool rollback → retry succeeds, **operator blocked from self-reporting**, **reentrant `resolve_report` during an outstanding transfer blocked by the `SETTLING` lock (pool debited exactly once)**.
 
 ---
 
