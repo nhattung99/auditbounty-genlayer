@@ -36,11 +36,10 @@ All notable changes to AuditBounty are documented here. Format is chronological,
   currently pinned `gltest` release expects (`vm.mock_web` requires a
   dict-like response); previously any AI-resolution test failed against
   `genlayer-test>=0.29.2` with `'str' object has no attribute 'get'`.
-- `test_transfer_failure_rolls_back_then_retry` no longer monkeypatches the
-  removed `gltest.direct.loader._EOAProxy` class. It now installs a
-  `vm._gl_call_hook` that raises on the underlying `PostMessage` call,
-  which is the mechanism the current `gltest` release actually routes
-  `emit_transfer` through.
+- Transfer-failure and reentrancy `gltest` cases pin to
+  `gltest.direct.loader._EOAProxy.emit_transfer` on `genlayer-test==0.29.2`.
+  That release still pays hunter EOAs through `_EOAProxy` and does not
+  route `emit_transfer` through `vm._gl_call_hook` / `PostMessage`.
 
 ### Verified
 - `gltest tests/test_audit_bounty.py`: **18/18 passed** (was 6/16 passing

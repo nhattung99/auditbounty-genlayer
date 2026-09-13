@@ -449,7 +449,7 @@ def test_double_resolve_blocked(direct_vm, direct_deploy, direct_accounts):
         contract.resolve_report(report_id)
 
 
-def test_transfer_failure_rolls_back_then_retry(direct_vm, direct_deploy, direct_accounts):
+def test_transfer_failure_rolls_back_then_retry(direct_vm, direct_deploy, direct_accounts, monkeypatch):
     operator = direct_accounts[1]
     hunter = direct_accounts[2]
     contract = direct_deploy(CONTRACT_PATH)
@@ -458,17 +458,15 @@ def test_transfer_failure_rolls_back_then_retry(direct_vm, direct_deploy, direct
     program_id = _create_program(contract, vm, operator)
     report_id = _submit(contract, vm, hunter, program_id)
 
-    # gltest's direct-mode PostMessage/emit_transfer call is fire-and-forget
-    # (no internal proxy class to monkeypatch in this gltest release, unlike
-    # older releases that exposed `_EOAProxy`). Install a `_gl_call_hook` to
-    # force the underlying PostMessage call to raise, so resolve_report's
-    # `except Exception` rollback path is genuinely exercised end-to-end.
-    def failing_post_message(_vm, request):
-        if "PostMessage" in request:
-            raise Exception("Simulated native transfer execution failure")
-        return None
+    # genlayer-test 0.29.2 still routes hunter EOA payouts through
+    # gltest.direct.loader._EOAProxy.emit_transfer. That path updates
+    # balances in-process and never hits vm._gl_call_hook / PostMessage.
+    import gltest.direct.loader
 
-    vm._gl_call_hook = failing_post_message
+    def failing_emit_transfer(self, value=None, **kwargs):
+        raise Exception("Simulated native transfer execution failure")
+
+    monkeypatch.setattr(gltest.direct.loader._EOAProxy, "emit_transfer", failing_emit_transfer)
 
     vm.sender = operator
     _resolve(contract, vm, report_id, "MEDIUM", 97, "Confirmed medium")
@@ -481,7 +479,7 @@ def test_transfer_failure_rolls_back_then_retry(direct_vm, direct_deploy, direct
     assert "Transfer failed" in row["verdict_reason"]
     assert _program(contract, program_id)["pool_balance"] == str(POOL)
 
-    vm._gl_call_hook = None
+    monkeypatch.undo()
     vm.sender = hunter
     contract.retry_resolution(report_id)
 
@@ -510,7 +508,7 @@ def test_operator_cannot_self_report(direct_vm, direct_deploy, direct_accounts):
     assert contract.get_report_count() == 0
 
 
-def test_settling_lock_blocks_reentrant_resolve(direct_vm, direct_deploy, direct_accounts):
+def test_settling_lock_blocks_reentrant_resolve(direct_vm, direct_deploy, direct_accounts, monkeypatch):
     operator = direct_accounts[1]
     hunter = direct_accounts[2]
     contract = direct_deploy(CONTRACT_PATH)
@@ -521,26 +519,27 @@ def test_settling_lock_blocks_reentrant_resolve(direct_vm, direct_deploy, direct
 
     reentered = {"attempted": False, "raised": None}
 
-    # Security fix: resolve_report now writes status="SETTLING" to storage
-    # BEFORE the external emit_transfer call, so a reentrant call on the
-    # exact same report (e.g. a hunter contract calling back into the
-    # AuditBounty contract from inside its own receive path while the
-    # PostMessage transfer is outstanding) cannot slip through and trigger
-    # a second AI resolution + a second payout from the same pool.
-    def reentrant_post_message(_vm, request):
-        if "PostMessage" in request and not reentered["attempted"]:
+    # Security fix: resolve_report writes status="SETTLING" to storage
+    # BEFORE emit_transfer. Drive the reentrant call from _EOAProxy.emit_transfer
+    # (the path this gltest release actually uses for hunter payouts).
+    import gltest.direct.loader
+
+    original_emit = gltest.direct.loader._EOAProxy.emit_transfer
+
+    def reentrant_emit_transfer(self, value=None, **kwargs):
+        if not reentered["attempted"]:
             reentered["attempted"] = True
             try:
                 contract.resolve_report(report_id)
             except Exception as exc:
                 reentered["raised"] = exc
-        return None
+        return original_emit(self, value, **kwargs)
 
-    vm._gl_call_hook = reentrant_post_message
+    monkeypatch.setattr(gltest.direct.loader._EOAProxy, "emit_transfer", reentrant_emit_transfer)
 
     vm.sender = operator
     _resolve(contract, vm, report_id, "HIGH", 92, "Confirmed high")
-    vm._gl_call_hook = None
+    monkeypatch.undo()
 
     # The reentrant call must have been attempted and must have been
     # rejected by the SETTLING guard, not silently ignored.
