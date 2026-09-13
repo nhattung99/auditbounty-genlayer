@@ -15,8 +15,8 @@ https://auditbounty-genlayer.vercel.app
 ## Deployed Contract
 
 - **Network:** studionet (GenLayer Studio hosted)
-- **Address:** `0x1F4E41A975E8E6Fd216223993dCa469C02Bd2850`
-- **Explorer:** https://genlayer-explorer.vercel.app/address/0x1F4E41A975E8E6Fd216223993dCa469C02Bd2850
+- **Address:** `0x53C29f3686DC323BBb1Ed00aC80e1a752F8c0043`
+- **Explorer:** https://explorer-studio.genlayer.com/address/0x53C29f3686DC323BBb1Ed00aC80e1a752F8c0043
 
 ---
 

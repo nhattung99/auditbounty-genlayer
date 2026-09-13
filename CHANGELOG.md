@@ -50,9 +50,10 @@ All notable changes to AuditBounty are documented here. Format is chronological,
 - `npm run build`: clean production build.
 
 ### Deployment
-- Contract logic changed → **requires redeploying `audit_bounty.py` on
-  studionet** and updating `VITE_CONTRACT_ADDRESS`. Old address:
-  `0x1F4E41A975E8E6Fd216223993dCa469C02Bd2850` (kept below for history).
+- Redeployed hardened `audit_bounty.py` on studionet:
+  `0x53C29f3686DC323BBb1Ed00aC80e1a752F8c0043`
+  ([explorer](https://explorer-studio.genlayer.com/address/0x53C29f3686DC323BBb1Ed00aC80e1a752F8c0043)).
+  Previous address (pre-hardening): `0x1F4E41A975E8E6Fd216223993dCa469C02Bd2850`.
 
 ---
 
