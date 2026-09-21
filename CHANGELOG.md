@@ -27,9 +27,10 @@ All notable changes to AuditBounty are documented here. Format is chronological,
 - `npm test` / `npm run build`: frontend money + poll/host helpers + float guard.
 
 ### Deployment
-- Contract logic changed → **redeploy `audit_bounty.py` on studionet** and
-  update `VITE_CONTRACT_ADDRESS`. Current live address until redeploy:
-  `0x53C29f3686DC323BBb1Ed00aC80e1a752F8c0043`.
+- Redeployed Evidence Integrity v2 `audit_bounty.py` on studionet:
+  `0x7FfaD478600C98F9B2DD79aBa61F2eB3c5398032`
+  ([explorer](https://explorer-studio.genlayer.com/address/0x7FfaD478600C98F9B2DD79aBa61F2eB3c5398032)).
+  Previous (Security Hardening v1): `0x53C29f3686DC323BBb1Ed00aC80e1a752F8c0043`.
 
 ---
 
