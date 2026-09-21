@@ -2,7 +2,38 @@
 
 All notable changes to AuditBounty are documented here. Format is chronological, newest first.
 
-## [Unreleased] — Security Hardening v1 (2026-09-11)
+## [Unreleased] — Evidence Integrity v2 (2026-09-21)
+
+**Type:** Security / UX integrity — GenLayer Portal Milestone submission.
+
+### Added
+- **Distinct reference hosts.** `submit_report` and `add_evidence` parse each
+  URL host (strip scheme / path / port / leading `www.`) and reject when:
+  - the two reference hosts are the same site, or
+  - any reference host matches a PoC host.
+  Hunters can no longer paste three URLs on one domain and call them
+  "independent". No money math changes — only `UserError` guards.
+- **Honest GenVM errors in the UI.** After `waitForTx`, the frontend checks
+  the receipt / list growth. A FINALIZED tx with GenVM ERROR no longer shows
+  a green "Transaction submitted" banner while Reports stays empty
+  (the false-success path from operator self-report / same-host refs).
+- Client-side `assertIndependentHosts` before signing, matching the on-chain
+  rule so MetaMask is not prompted for an obviously invalid submit.
+- `gltest` cases: `test_reference_hosts_must_be_distinct`,
+  `test_add_evidence_enforces_distinct_hosts`.
+
+### Verified
+- `gltest tests/test_audit_bounty.py`: expect **20/20** (18 from v1 + 2 host cases).
+- `npm test` / `npm run build`: frontend money + poll/host helpers + float guard.
+
+### Deployment
+- Contract logic changed → **redeploy `audit_bounty.py` on studionet** and
+  update `VITE_CONTRACT_ADDRESS`. Current live address until redeploy:
+  `0x53C29f3686DC323BBb1Ed00aC80e1a752F8c0043`.
+
+---
+
+## [1.1.0] — Security Hardening v1 (2026-09-11)
 
 **Type:** Security / architecture improvement — GenLayer Portal Milestone submission.
 

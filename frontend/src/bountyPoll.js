@@ -17,7 +17,48 @@ export function formatWalletError(err, fallback = 'Wallet request failed') {
   if (raw.includes('unrecognized chain') || raw.includes('chain disconnected') || raw.includes('4902')) {
     return 'Approve adding Genlayer Studio Network in MetaMask, then retry the transaction.';
   }
+  if (raw.includes('operator cannot') || raw.includes('own bounty program')) {
+    return 'Program operators cannot submit reports against their own bounty. Switch to a hunter wallet.';
+  }
+  if (raw.includes('different hosts') || raw.includes('must not match') || raw.includes('independent websites')) {
+    return 'Reference URLs must be on different hosts from each other and from every PoC URL.';
+  }
+  if (raw.includes('genvm error') || raw.includes('no new report appeared')) {
+    return err?.message || fallback;
+  }
   return err?.shortMessage || err?.message || fallback;
+}
+
+export function urlHost(raw) {
+  try {
+    const u = new URL(String(raw || '').trim());
+    let host = (u.hostname || '').toLowerCase();
+    if (host.startsWith('www.')) host = host.slice(4);
+    return host;
+  } catch {
+    return '';
+  }
+}
+
+export function assertIndependentHosts(pocUrls, refUrls) {
+  const pocs = (pocUrls || []).map((u) => String(u || '').trim()).filter(Boolean);
+  const refs = (refUrls || []).map((u) => String(u || '').trim()).filter(Boolean);
+  if (pocs.length < 1) throw new Error('Paste at least 1 proof-of-concept URL.');
+  if (refs.length < 2) throw new Error('Paste at least 2 independent reference URLs.');
+
+  const pocHosts = pocs.map(urlHost);
+  const refHosts = refs.map(urlHost);
+  if (pocHosts.some((h) => !h) || refHosts.some((h) => !h)) {
+    throw new Error('Every URL must be a valid http(s) link with a hostname.');
+  }
+  if (new Set(refHosts).size < 2) {
+    throw new Error('Reference URLs must be on different websites (different hosts).');
+  }
+  for (const h of refHosts) {
+    if (pocHosts.includes(h)) {
+      throw new Error(`Reference host must not match a PoC host: ${h}`);
+    }
+  }
 }
 
 export function sameAddress(a, b) {

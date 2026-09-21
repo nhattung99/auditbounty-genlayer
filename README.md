@@ -48,7 +48,7 @@ No treasury hop. No value-forward bug.
 ## Resolution flow
 
 1. **Create program** — operator sets scope, severity criteria, four fixed tier amounts, and locks GEN into `pool_balance`.
-2. **Submit report** — hunter (any address other than the program's own operator — see [Security](#security)) sends title, ≥1 PoC URL, ≥2 independent reference URLs.
+2. **Submit report** — hunter (any address other than the program's own operator — see [Security](#security)) sends title, ≥1 PoC URL, ≥2 independent reference URLs on **distinct hosts** (refs must differ from each other and from every PoC host).
 3. **Resolve** — `resolve_report` runs `gl.vm.run_nondet`:
    - Leader fetches every URL with `gl.nondet.web.render`, prompts the model, parses `{verdict, confidence, reason}`.
    - Validator: absolute `verdict ==` and the same `confidence >= 60` branch.
@@ -63,7 +63,9 @@ No treasury hop. No value-forward bug.
 
 - **Settlement reentrancy guard.** `resolve_report` / `retry_resolution` persist `report.status = "SETTLING"` *before* the external `emit_transfer` call. Both methods only accept reports in specific prior statuses (`SUBMITTED`/`DISPUTED` and `PAYOUT_FAILED`/`REJECTED_NO_FUNDS` respectively), so a reentrant call on the same report while a transfer is outstanding is rejected instead of re-running AI resolution and double-spending the pool.
 - **Operator self-report block.** `submit_report` rejects a caller whose address matches the program's `operator` — an operator cannot submit (and effectively self-adjudicate) a report against their own bounty pool.
-- See [`CHANGELOG.md`](CHANGELOG.md) for the full Security Hardening v1 write-up and test evidence.
+- **Distinct reference hosts.** Reference URLs must resolve to different hosts from each other and from every PoC host (`www.` and ports are normalized away). Applies to `submit_report` and `add_evidence`.
+- **Honest GenVM errors.** The UI clears the green success banner when a FINALIZED tx did not create state (GenVM ERROR) — e.g. operator self-report or same-host refs.
+- See [`CHANGELOG.md`](CHANGELOG.md) for Security Hardening v1 and Evidence Integrity v2 write-ups.
 
 ---
 

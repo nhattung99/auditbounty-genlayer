@@ -26,6 +26,9 @@ import {
   parseGenToWei,
   formatWeiToGen,
   sanitizeGenInput,
+  receiptLooksFailed,
+  assertIndependentHosts,
+  txExplorerUrl,
 } from './genlayerClient.js';
 import {
   extractCreatedId,
@@ -236,7 +239,7 @@ export default function App() {
         value: value === undefined ? 0n : value,
       });
       setTxHash(hash);
-      await waitForTx(client, hash);
+      const receipt = await waitForTx(client, hash);
 
       if (poll === 'programs') {
         const previousCount = programs.length;
@@ -247,6 +250,12 @@ export default function App() {
           load: async () => fetchPrograms({ silent: true }),
         });
         setPrograms(listed.rows || []);
+        if (receiptLooksFailed(receipt) && (listed.rows || []).length <= previousCount) {
+          setTxHash(null);
+          throw new Error(
+            `Transaction finalized with a GenVM error (program was not created). Check Explorer: ${txExplorerUrl(hash)}`
+          );
+        }
       } else {
         const previousCount = reports.length;
         const listed = await pollUntilListed({
@@ -257,15 +266,48 @@ export default function App() {
         });
         setReports(listed.rows || []);
         await fetchPrograms({ silent: true });
+
         const createdId =
           fnName === 'submit_report'
-            ? extractCreatedId(hash) || (listed.count > 0 ? String(listed.count - 1) : null)
+            ? extractCreatedId(hash) || ((listed.rows || []).length > previousCount
+              ? String((listed.count || listed.rows.length) - 1)
+              : null)
             : args && args[0] && !String(args[0]).startsWith('0x')
               ? String(args[0])
               : null;
+
+        if (fnName === 'submit_report' && (listed.rows || []).length <= previousCount) {
+          setTxHash(null);
+          throw new Error(
+            `Transaction finalized but no new report appeared — GenVM likely ERROR ` +
+            `(operator cannot self-report, or reference hosts must be distinct). ` +
+            `Check Explorer: ${txExplorerUrl(hash)}`
+          );
+        }
+
         if (createdId) {
           setActiveReportId(createdId);
-          await fetchDetail(createdId);
+          const detail = await fetchDetail(createdId);
+          if (receiptLooksFailed(receipt)) {
+            const status = String(detail?.status || '');
+            const okByState =
+              status === 'RESOLVED' ||
+              status === 'DISPUTED' ||
+              status === 'REJECTED_NO_FUNDS' ||
+              status === 'PAYOUT_FAILED' ||
+              status === 'SUBMITTED';
+            if (!okByState) {
+              setTxHash(null);
+              throw new Error(
+                `Transaction finalized with a GenVM error. Check Explorer: ${txExplorerUrl(hash)}`
+              );
+            }
+          }
+        } else if (receiptLooksFailed(receipt)) {
+          setTxHash(null);
+          throw new Error(
+            `Transaction finalized with a GenVM error. Check Explorer: ${txExplorerUrl(hash)}`
+          );
         }
       }
       return hash;
@@ -318,8 +360,7 @@ export default function App() {
       if (!reportTitle.trim()) throw new Error('Title cannot be empty.');
       const pocs = cleanUrls(pocUrls);
       const refs = cleanUrls(refUrls);
-      if (pocs.length < 1) throw new Error('Paste at least 1 proof-of-concept URL.');
-      if (refs.length < 2) throw new Error('Paste at least 2 independent reference URLs.');
+      assertIndependentHosts(pocs, refs);
       await runWrite('submit_report', [submitProgramId, reportTitle.trim(), pocs, refs]);
       setReportTitle('');
       setPocUrls(['']);
@@ -334,8 +375,7 @@ export default function App() {
     try {
       const pocs = cleanUrls(pocUrls);
       const refs = cleanUrls(refUrls);
-      if (pocs.length < 1) throw new Error('Paste at least 1 proof-of-concept URL.');
-      if (refs.length < 2) throw new Error('Paste at least 2 independent reference URLs.');
+      assertIndependentHosts(pocs, refs);
       await runWrite('add_evidence', [reportId, pocs, refs]);
     } catch (err) {
       setErrorMessage(formatWalletError(err, 'Add evidence failed'));
@@ -405,7 +445,7 @@ export default function App() {
         </button>
       </div>
       <div className="field">
-        <label className="label">Independent reference URLs (min 2, not written by the hunter)</label>
+        <label className="label">Independent reference URLs (min 2, different hosts from each other and from PoC)</label>
         {refUrls.map((u, i) => (
           <div className="url-row" key={`r-${i}`}>
             <input

@@ -13,6 +13,8 @@ import {
   extractCreatedId,
   shouldKeepPolling,
   pollUntilListed,
+  urlHost,
+  assertIndependentHosts,
 } from '../bountyPoll.js';
 
 function assert(cond, msg) {
@@ -50,8 +52,36 @@ function runBountyPollTests() {
     formatWalletError({ message: 'User rejected the request. Details: user cancel Version: viem@2.55.19' }).includes('Confirm'),
     'rejected wallet request is explained'
   );
+  assert(
+    formatWalletError({ message: 'Program operator cannot submit reports against their own bounty program' }).includes('hunter wallet'),
+    'operator self-report error is explained'
+  );
   assert(sameAddress('0xAbc', '0xabc') === true, 'same address ignores case');
   assert(sameAddress('0xabc', '0xdef') === false, 'different addresses');
+
+  assertEqual(urlHost('https://www.Example.com/path'), 'example.com', 'urlHost strips www and lowercases');
+  assertEqual(urlHost('https://docs.example.com:443/a'), 'docs.example.com', 'urlHost drops port');
+  assertEqual(urlHost('not-a-url'), '', 'urlHost rejects garbage');
+
+  assertIndependentHosts(
+    ['https://example.com/poc'],
+    ['https://docs.example.com/a', 'https://advisory.example.com/b']
+  );
+  try {
+    assertIndependentHosts(['https://example.com/poc'], ['https://docs.example.com/a', 'https://docs.example.com/b']);
+    throw new Error('same ref hosts should throw');
+  } catch (err) {
+    assert(String(err.message).includes('different'), 'same ref hosts blocked');
+  }
+  try {
+    assertIndependentHosts(
+      ['https://example.com/poc'],
+      ['https://example.com/policy', 'https://advisory.example.com/b']
+    );
+    throw new Error('poc/ref same host should throw');
+  } catch (err) {
+    assert(String(err.message).includes('must not match'), 'poc/ref same host blocked');
+  }
 
   assertEqual(resolveReadAccount(undefined).address, VIEW_FROM, 'missing account uses view from');
   assertEqual(resolveReadAccount('0xabc').address, VIEW_FROM, 'short address rejected');

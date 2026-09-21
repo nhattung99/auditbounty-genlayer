@@ -13,7 +13,7 @@ import {
   formatWalletError,
 } from './bountyPoll.js';
 
-export { formatWalletError } from './bountyPoll.js';
+export { formatWalletError, assertIndependentHosts, urlHost } from './bountyPoll.js';
 export { parseGenToWei, formatWeiToGen, sanitizeGenInput, WEI_PER_GEN };
 export { unwrapViewResult, normalizeProgramList, normalizeReportList, parseCount } from './bountyPoll.js';
 
@@ -250,4 +250,30 @@ export const waitForTx = async (client, hash) => {
     }
   }
   return hash;
+};
+
+const pickExecResult = (receipt) => {
+  if (!receipt || typeof receipt !== 'object') return '';
+  const raw =
+    receipt.executionResult ??
+    receipt.execution_result ??
+    receipt.genvmResult ??
+    receipt.genvm_result ??
+    receipt.result ??
+    receipt.status;
+  return String(raw || '').toLowerCase();
+};
+
+export const receiptLooksFailed = (receipt) => {
+  if (!receipt || typeof receipt !== 'object') return false;
+  const exec = pickExecResult(receipt);
+  if (exec === 'error' || exec === 'failed' || exec === 'reverted' || exec === 'rollback') return true;
+  const nested = receipt.genvm || receipt.execution || receipt.receipt;
+  if (nested && nested !== receipt) {
+    const nestedExec = pickExecResult(nested);
+    if (nestedExec === 'error' || nestedExec === 'failed' || nestedExec === 'reverted' || nestedExec === 'rollback') {
+      return true;
+    }
+  }
+  return false;
 };

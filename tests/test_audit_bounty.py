@@ -389,6 +389,102 @@ def test_missing_poc_and_reference_urls(direct_vm, direct_deploy, direct_account
     assert contract.get_report_count() == 0
 
 
+def test_reference_hosts_must_be_distinct(direct_vm, direct_deploy, direct_accounts):
+    operator = direct_accounts[1]
+    hunter = direct_accounts[2]
+    contract = direct_deploy(CONTRACT_PATH)
+    vm = _active_vm(direct_vm)
+
+    program_id = _create_program(contract, vm, operator)
+    vm.sender = hunter
+
+    # Same host on both references (even different paths) is rejected.
+    with pytest.raises(Exception):
+        contract.submit_report(
+            program_id,
+            "Same ref host",
+            [POC],
+            [
+                "https://docs.example.com/severity-policy",
+                "https://docs.example.com/another-page",
+            ],
+        )
+
+    # Reference host matching a PoC host is rejected.
+    with pytest.raises(Exception):
+        contract.submit_report(
+            program_id,
+            "Ref matches PoC host",
+            ["https://example.com/poc.md"],
+            [
+                "https://example.com/policy",
+                "https://advisory.example.com/note",
+            ],
+        )
+
+    # www. stripping must still treat hosts as the same.
+    with pytest.raises(Exception):
+        contract.submit_report(
+            program_id,
+            "www strip",
+            [POC],
+            [
+                "https://www.docs.example.com/a",
+                "https://docs.example.com/b",
+            ],
+        )
+
+    assert contract.get_report_count() == 0
+
+    # Distinct hosts (including www. vs bare for different sites) succeed.
+    report_id = contract.submit_report(
+        program_id,
+        "Distinct hosts ok",
+        ["https://www.example.com/poc.md"],
+        [
+            "https://docs.example.com/severity-policy",
+            "https://advisory.example.com/cve-2026-0001",
+        ],
+    )
+    assert report_id == "0"
+    assert contract.get_report_count() == 1
+
+
+def test_add_evidence_enforces_distinct_hosts(direct_vm, direct_deploy, direct_accounts):
+    operator = direct_accounts[1]
+    hunter = direct_accounts[2]
+    contract = direct_deploy(CONTRACT_PATH)
+    vm = _active_vm(direct_vm)
+
+    program_id = _create_program(contract, vm, operator)
+    report_id = _submit(contract, vm, hunter, program_id)
+    vm.sender = operator
+    _resolve(contract, vm, report_id, "HIGH", 41, "Evidence is insufficient")
+    assert _report(contract, report_id)["status"] == "DISPUTED"
+
+    vm.sender = hunter
+    with pytest.raises(Exception):
+        contract.add_evidence(
+            report_id,
+            ["https://example.com/clear-poc.md"],
+            [
+                "https://docs.example.com/a",
+                "https://docs.example.com/b",
+            ],
+        )
+
+    contract.add_evidence(
+        report_id,
+        ["https://example.com/clear-poc.md"],
+        [
+            "https://docs.example.com/severity-policy#high",
+            "https://researcher.example.com/confirm",
+        ],
+    )
+    assert _report(contract, report_id)["status"] == "DISPUTED"
+    assert contract.get_report_count() == 1
+
+
 def test_payout_tiers_must_be_descending(direct_vm, direct_deploy, direct_accounts):
     operator = direct_accounts[1]
     contract = direct_deploy(CONTRACT_PATH)

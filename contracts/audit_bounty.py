@@ -62,6 +62,44 @@ def _clean_http_urls(urls, kind: str, minimum: int) -> list:
     return cleaned
 
 
+def _url_host(url: str) -> str:
+    s = str(url).strip().lower()
+    if s.startswith("https://"):
+        s = s[8:]
+    elif s.startswith("http://"):
+        s = s[7:]
+    else:
+        raise UserError("Invalid URL: must start with http:// or https://")
+    for sep in ("/", "?", "#"):
+        cut = s.find(sep)
+        if cut >= 0:
+            s = s[:cut]
+    if ":" in s:
+        s = s.split(":")[0]
+    if s.startswith("www."):
+        s = s[4:]
+    if not s:
+        raise UserError("Could not parse URL host")
+    return s
+
+
+def _assert_independent_sources(poc_urls, reference_urls) -> None:
+    """Reference hosts must differ from each other and from every PoC host."""
+    if len(reference_urls) < 2:
+        raise UserError("At least 2 independent reference URLs required")
+    poc_hosts = []
+    for u in poc_urls:
+        poc_hosts.append(_url_host(u))
+    ref_hosts = []
+    for u in reference_urls:
+        ref_hosts.append(_url_host(u))
+    if len(set(ref_hosts)) < 2:
+        raise UserError("Reference URLs must be independent websites (different hosts)")
+    for h in ref_hosts:
+        if h in poc_hosts:
+            raise UserError("Reference URL host must not match a proof-of-concept URL host: " + h)
+
+
 def _criteria_to_list(criteria) -> list:
     out = []
     try:
@@ -289,6 +327,7 @@ class Contract(gl.Contract):
 
         cleaned_poc = _clean_http_urls(poc_urls, "proof-of-concept", 1)
         cleaned_refs = _clean_http_urls(reference_urls, "independent reference", 2)
+        _assert_independent_sources(cleaned_poc, cleaned_refs)
 
         report_id = str(self.report_counter)
         self.report_counter = self.report_counter + bigint(1)
@@ -326,8 +365,11 @@ class Contract(gl.Contract):
         if report.settled:
             raise UserError("Report already settled")
 
-        report.poc_urls = _clean_http_urls(poc_urls, "proof-of-concept", 1)
-        report.reference_urls = _clean_http_urls(reference_urls, "independent reference", 2)
+        cleaned_poc = _clean_http_urls(poc_urls, "proof-of-concept", 1)
+        cleaned_refs = _clean_http_urls(reference_urls, "independent reference", 2)
+        _assert_independent_sources(cleaned_poc, cleaned_refs)
+        report.poc_urls = cleaned_poc
+        report.reference_urls = cleaned_refs
         self.reports[report_id] = report
 
     @gl.public.write
