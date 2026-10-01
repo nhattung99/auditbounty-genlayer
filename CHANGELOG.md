@@ -2,7 +2,33 @@
 
 All notable changes to AuditBounty are documented here. Format is chronological, newest first.
 
-## [Unreleased] — Evidence Integrity v2 (2026-09-21)
+## [Unreleased] — Program Lifecycle v3
+
+**Type:** Lifecycle / UX — GenLayer Portal Milestone submission.
+
+### Added
+- **`close_program(program_id)`** — operator-only; sets `active = false`. Blocks new
+  `submit_report` / `fund_program`. Existing `SUBMITTED` / `DISPUTED` reports can
+  still be resolved.
+- **`withdraw_unused_pool(program_id)`** — operator-only after close; transfers the
+  full remaining `pool_balance` via `emit_transfer` (integer amount, no % math).
+  Pool zeroed before transfer; rollback on transfer failure.
+- **Soft-fail evidence fetch.** `web.render` errors become
+  `"Evidence page unavailable …"` in the AI prompt instead of aborting
+  `resolve_report` with GenVM ERROR (dead / 404 URLs no longer strand reports).
+
+### Verified
+- `gltest tests/test_audit_bounty.py`: expect **22/22** (20 from v2 + 2 lifecycle / URL cases).
+- `npm test` / `npm run build`: unchanged money helpers + program actions.
+
+### Deployment
+- Redeploy `audit_bounty.py` on studionet and update `VITE_CONTRACT_ADDRESS` after
+  Studio shows **Result: SUCCESS** (replaces Evidence Integrity v2
+  `0x7FfaD478600C98F9B2DD79aBa61F2eB3c5398032`).
+
+---
+
+## Evidence Integrity v2 (2026-09-21)
 
 **Type:** Security / UX integrity — GenLayer Portal Milestone submission.
 
