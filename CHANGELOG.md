@@ -22,9 +22,10 @@ All notable changes to AuditBounty are documented here. Format is chronological,
 - `npm test` / `npm run build`: unchanged money helpers + program actions.
 
 ### Deployment
-- Redeploy `audit_bounty.py` on studionet and update `VITE_CONTRACT_ADDRESS` after
-  Studio shows **Result: SUCCESS** (replaces Evidence Integrity v2
-  `0x7FfaD478600C98F9B2DD79aBa61F2eB3c5398032`).
+- Redeployed Program Lifecycle v3 `audit_bounty.py` on studionet:
+  `0xE22b11A7014e7e321CB0699108A2D11929F5366D`
+  ([explorer](https://explorer-studio.genlayer.com/address/0xE22b11A7014e7e321CB0699108A2D11929F5366D)).
+  Previous (Evidence Integrity v2): `0x7FfaD478600C98F9B2DD79aBa61F2eB3c5398032`.
 
 ---
 
