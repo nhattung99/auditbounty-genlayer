@@ -400,24 +400,6 @@ export default function App() {
     }
   };
 
-  const handleCloseProgram = async (programId) => {
-    try {
-      await runWrite('close_program', [programId]);
-      await fetchPrograms();
-    } catch (err) {
-      setErrorMessage(formatWalletError(err, 'Close program failed'));
-    }
-  };
-
-  const handleWithdrawPool = async (programId) => {
-    try {
-      await runWrite('withdraw_unused_pool', [programId]);
-      await fetchPrograms();
-    } catch (err) {
-      setErrorMessage(formatWalletError(err, 'Withdraw pool failed'));
-    }
-  };
-
   const programName = (id) => {
     const found = programs.find((p) => String(p.program_id) === String(id));
     return found ? found.project_name : `Program #${id}`;
@@ -649,7 +631,7 @@ export default function App() {
                     >
                       Submit a report
                     </button>
-                    {isOperator && program.active && (
+                    {isOperator && (
                       <div className="url-row">
                         <input
                           className="input mono"
@@ -665,26 +647,6 @@ export default function App() {
                           Fund
                         </button>
                       </div>
-                    )}
-                    {isOperator && program.active && (
-                      <button
-                        className="btn-ghost full"
-                        type="button"
-                        disabled={loading}
-                        onClick={() => handleCloseProgram(program.program_id)}
-                      >
-                        Close program (no new reports)
-                      </button>
-                    )}
-                    {isOperator && !program.active && BigInt(program.pool_balance || 0) > 0n && (
-                      <button
-                        className="btn-secondary full"
-                        type="button"
-                        disabled={loading}
-                        onClick={() => handleWithdrawPool(program.program_id)}
-                      >
-                        Withdraw unused pool ({formatWeiToGen(program.pool_balance)} GEN)
-                      </button>
                     )}
                   </div>
                 </div>
@@ -793,7 +755,7 @@ export default function App() {
               onChange={(e) => setSubmitProgramId(e.target.value)}
             >
               <option value="">Select a program</option>
-              {programs.filter((p) => p.active).map((p) => (
+              {programs.map((p) => (
                 <option key={p.program_id} value={p.program_id}>
                   #{p.program_id} {p.project_name} — pool {formatWeiToGen(p.pool_balance)} GEN
                 </option>

@@ -198,7 +198,7 @@ def _fetch_url(url: str, kind: str) -> str:
         body = res.body if hasattr(res, "body") else res
         return "[" + url + "]: " + str(body)
     except Exception as e:
-        return "[" + url + "]: Evidence page unavailable (" + kind + "): " + str(e)
+        raise UserError("Failed to fetch " + kind + " URL: " + url + " (" + str(e) + ")")
 
 
 @allow_storage
@@ -302,47 +302,8 @@ class Contract(gl.Contract):
         if amount <= bigint(0):
             raise UserError("Must send GEN to fund the pool")
         program = self.programs[program_id]
-        if not program.active:
-            raise UserError("Cannot fund an inactive bounty program")
         program.pool_balance = program.pool_balance + amount
         self.programs[program_id] = program
-
-    @gl.public.write
-    def close_program(self, program_id: str) -> None:
-        if program_id not in self.programs:
-            raise UserError("Bounty program does not exist")
-        program = self.programs[program_id]
-        sender = _to_address(gl.message.sender_address)
-        if not _same_addr(sender, program.operator):
-            raise UserError("Only the program operator can close the bounty program")
-        if not program.active:
-            raise UserError("Bounty program is already inactive")
-        program.active = False
-        self.programs[program_id] = program
-
-    @gl.public.write
-    def withdraw_unused_pool(self, program_id: str) -> None:
-        if program_id not in self.programs:
-            raise UserError("Bounty program does not exist")
-        program = self.programs[program_id]
-        sender = _to_address(gl.message.sender_address)
-        if not _same_addr(sender, program.operator):
-            raise UserError("Only the program operator can withdraw the pool")
-        if program.active:
-            raise UserError("Close the bounty program before withdrawing unused pool")
-        amount = program.pool_balance
-        if amount <= bigint(0):
-            raise UserError("No unused pool balance to withdraw")
-
-        program.pool_balance = bigint(0)
-        self.programs[program_id] = program
-
-        try:
-            gl.get_contract_at(_to_address(program.operator)).emit_transfer(value=u256(amount))
-        except Exception as e:
-            program.pool_balance = amount
-            self.programs[program_id] = program
-            raise UserError("Pool withdrawal failed: " + str(e))
 
     @gl.public.write
     def submit_report(

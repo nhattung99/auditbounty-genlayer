@@ -38,9 +38,8 @@ A previous project (JobVerdict) was rejected because %-tolerance consensus let t
 Multi-contract layouts previously trapped GEN when a cross-contract call did not forward `value`. AuditBounty keeps funds here only:
 
 1. Operator sends GEN with `create_bounty_program` (`gl.message.value`).
-2. Optional top-up via `fund_program` (active programs only).
-3. Operator may `close_program` then `withdraw_unused_pool` to reclaim remaining GEN (integer transfer, no %).
-4. On resolve the contract pays the hunter with `gl.get_contract_at(hunter).emit_transfer(value=u256(payout))`.
+2. Optional top-up via `fund_program`.
+3. On resolve the contract pays the hunter with `gl.get_contract_at(hunter).emit_transfer(value=u256(payout))`.
 
 No treasury hop. No value-forward bug.
 
@@ -51,7 +50,7 @@ No treasury hop. No value-forward bug.
 1. **Create program** — operator sets scope, severity criteria, four fixed tier amounts, and locks GEN into `pool_balance`.
 2. **Submit report** — hunter (any address other than the program's own operator — see [Security](#security)) sends title, ≥1 PoC URL, ≥2 independent reference URLs on **distinct hosts** (refs must differ from each other and from every PoC host).
 3. **Resolve** — `resolve_report` runs `gl.vm.run_nondet`:
-   - Leader fetches every URL with `gl.nondet.web.render` (unavailable pages become placeholder text, not a hard abort), prompts the model, parses `{verdict, confidence, reason}`.
+   - Leader fetches every URL with `gl.nondet.web.render`, prompts the model, parses `{verdict, confidence, reason}`.
    - Validator: absolute `verdict ==` and the same `confidence >= 60` branch.
 4. `confidence < 60` → `DISPUTED`. Hunter may `add_evidence` and call `resolve_report` again.
 5. Valid verdict → lookup fixed payout. If the pool is short → `REJECTED_NO_FUNDS` (verdict kept, no second AI run).
@@ -66,8 +65,7 @@ No treasury hop. No value-forward bug.
 - **Operator self-report block.** `submit_report` rejects a caller whose address matches the program's `operator` — an operator cannot submit (and effectively self-adjudicate) a report against their own bounty pool.
 - **Distinct reference hosts.** Reference URLs must resolve to different hosts from each other and from every PoC host (`www.` and ports are normalized away). Applies to `submit_report` and `add_evidence`.
 - **Honest GenVM errors.** The UI clears the green success banner when a FINALIZED tx did not create state (GenVM ERROR) — e.g. operator self-report or same-host refs.
-- **Program lifecycle.** Operator can close a program and withdraw the unused pool after close; hunters cannot submit to inactive programs.
-- See [`CHANGELOG.md`](CHANGELOG.md) for v1–v3 milestone write-ups.
+- See [`CHANGELOG.md`](CHANGELOG.md) for Security Hardening v1 and Evidence Integrity v2 write-ups.
 
 ---
 

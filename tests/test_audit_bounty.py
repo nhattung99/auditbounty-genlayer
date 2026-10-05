@@ -365,14 +365,11 @@ def test_web_fail_and_invalid_json(direct_vm, direct_deploy, direct_accounts):
     assert row["confidence"] == 0
 
     report_id_2 = _submit(contract, vm, hunter, program_id, title="Second report")
-    sim_installMocks(vm, web={}, llm={"verdict": "INVALID", "confidence": 85, "reason": "Evidence URLs unavailable"})
+    sim_installMocks(vm, web={}, llm={"verdict": "HIGH", "confidence": 90, "reason": "unreachable"})
     vm.sender = operator
-    contract.resolve_report(report_id_2)
-    row_2 = _report(contract, report_id_2)
-    assert row_2["status"] == "RESOLVED"
-    assert row_2["verdict"] == "INVALID"
-    assert row_2["settled"] is True
-    assert row_2["payout_amount"] == "0"
+    with pytest.raises(Exception):
+        contract.resolve_report(report_id_2)
+    assert _report(contract, report_id_2)["status"] == "SUBMITTED"
 
 
 def test_missing_poc_and_reference_urls(direct_vm, direct_deploy, direct_accounts):
@@ -672,83 +669,13 @@ def test_inactive_program_blocks_submit(direct_vm, direct_deploy, direct_account
     vm = _active_vm(direct_vm)
 
     program_id = _create_program(contract, vm, operator)
-    vm.sender = operator
-    contract.close_program(program_id)
-    assert _program(contract, program_id)["active"] is False
+    program = contract.programs[program_id]
+    program.active = False
+    contract.programs[program_id] = program
 
     vm.sender = hunter
     with pytest.raises(Exception):
         contract.submit_report(program_id, "Too late", [POC], [REF1, REF2])
-
-    vm.sender = operator
-    with pytest.raises(Exception):
-        _set_value(vm, 100)
-        contract.fund_program(program_id)
-    _clear_value(vm)
-
-
-def test_close_and_withdraw_unused_pool(direct_vm, direct_deploy, direct_accounts):
-    operator = direct_accounts[1]
-    hunter = direct_accounts[2]
-    contract = direct_deploy(CONTRACT_PATH)
-    vm = _active_vm(direct_vm)
-
-    program_id = _create_program(contract, vm, operator)
-    report_id = _submit(contract, vm, hunter, program_id)
-    vm.sender = operator
-    _resolve(contract, vm, report_id, "INVALID", 90, "Not a bug")
-    assert _program(contract, program_id)["pool_balance"] == str(POOL)
-
-    vm.sender = hunter
-    with pytest.raises(Exception):
-        contract.close_program(program_id)
-
-    vm.sender = operator
-    with pytest.raises(Exception):
-        contract.withdraw_unused_pool(program_id)
-
-    contract.close_program(program_id)
-    assert _program(contract, program_id)["active"] is False
-
-    contract.withdraw_unused_pool(program_id)
-    assert _program(contract, program_id)["pool_balance"] == "0"
-
-    with pytest.raises(Exception):
-        contract.withdraw_unused_pool(program_id)
-
-
-def test_resolve_continues_when_web_render_fails(direct_vm, direct_deploy, direct_accounts):
-    operator = direct_accounts[1]
-    hunter = direct_accounts[2]
-    contract = direct_deploy(CONTRACT_PATH)
-    vm = _active_vm(direct_vm)
-
-    program_id = _create_program(contract, vm, operator)
-    dead_ref = "https://dead.example.com/missing-page"
-    report_id = _submit(
-        contract,
-        vm,
-        hunter,
-        program_id,
-        title="Dead link refs",
-        poc=[POC],
-        refs=[REF1, dead_ref],
-    )
-
-    sim_installMocks(
-        vm,
-        web={
-            POC: "PoC text",
-            REF1: "Policy text",
-        },
-        llm={"verdict": "INVALID", "confidence": 88, "reason": "Independent refs insufficient"},
-    )
-    vm.sender = operator
-    contract.resolve_report(report_id)
-    row = _report(contract, report_id)
-    assert row["status"] == "RESOLVED"
-    assert row["verdict"] == "INVALID"
-    assert row["settled"] is True
 
 
 def test_list_and_counts(direct_vm, direct_deploy, direct_accounts):
